@@ -227,7 +227,7 @@ def find_malicious_packages(lock_file_path):
         for name, info in packages.items():
             package_name = name.rsplit('node_modules/', 1)[-1]
             version = info.get('version')
-            //print(f"Checking package: {package_name}@{version}...")
+            #print(f"Checking package: {package_name}@{version}...")
 
             if package_name in KNOWN_MALICIOUS_PACKAGES:
                 if version in KNOWN_MALICIOUS_PACKAGES[package_name]:
