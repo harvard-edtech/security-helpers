@@ -4,6 +4,9 @@ import hashlib
 import sys
 from pathlib import Path
 
+class LockFileNotFound(Exception):
+    pass
+
 # The known malicious bundle.js hash from the Shai-Hulud attack
 MALICIOUS_BUNDLE_HASH = "46faab8ab153fae6e80e7cca38eab363075bb524edd79e42269217a083628f09"
 
@@ -209,10 +212,12 @@ KNOWN_MALICIOUS_PACKAGES = {
 
 def find_malicious_packages(lock_file_path):
     "Parses a package-lock.json file to find known malicious packages."
+
     affected = []
+    present_unaffected = []
+
     if not lock_file_path.exists():
-        print(f"Lock file not found: {lock_file_path}. Skipping.")
-        return affected
+        raise LockFileNotFound(f"Lock file not found: {lock_file_path}. Skipping.")
 
     try:
         with open(lock_file_path, 'r') as f:
@@ -226,11 +231,13 @@ def find_malicious_packages(lock_file_path):
             if package_name in KNOWN_MALICIOUS_PACKAGES:
                 if version in KNOWN_MALICIOUS_PACKAGES[package_name]:
                     affected.append(f"Found known malicious package: {package_name}@{version}")
+                else:
+                    present_unaffected.append(f"Found package {package_name}@{version}, but version is not known to be malicious.")
 
     except (json.JSONDecodeError, FileNotFoundError) as e:
         print(f"Error reading or parsing lock file: {e}")
 
-    return affected
+    return affected, present_unaffected
 
 def find_suspicious_scripts(project_path):
     "Recursively checks for suspicious 'postinstall' or 'install' scripts."
@@ -278,13 +285,16 @@ def run_audit(project_path):
 
     results = {
         "malicious_packages": [],
+        "identified_packages": [],
         "suspicious_scripts": [],
         "malicious_bundle": [],
     }
 
     # Check for known malicious packages in the lock file
     print("Step 1: Checking for known malicious packages...")
-    results["malicious_packages"] = find_malicious_packages(project_path / 'package-lock.json')
+    affected, present_unaffected = find_malicious_packages(project_path / 'package-lock.json')
+    results["malicious_packages"] = affected
+    results["identified_packages"] = present_unaffected
 
     # Check for suspicious install scripts
     print("\nStep 2: Checking for suspicious 'postinstall' or 'install' scripts...")
@@ -304,7 +314,11 @@ if __name__ == '__main__':
 
     project_directory = Path(sys.argv[1])
 
-    audit_results = run_audit(project_directory)
+    try:
+        audit_results = run_audit(project_directory)
+    except LockFileNotFound as e:
+        print(e)
+        sys.exit(1)
 
     print("\n--- Audit Summary ---")
     if any(audit_results.values()):
@@ -312,6 +326,11 @@ if __name__ == '__main__':
         if audit_results["malicious_packages"]:
             print("\nMalicious Packages:")
             for item in audit_results["malicious_packages"]:
+                print(f"  - {item}")
+
+        if audit_results["identified_packages"]:
+            print("\nIdentified Packages:")
+            for item in audit_results["identified_packages"]:
                 print(f"  - {item}")
 
         if audit_results["suspicious_scripts"]:
