@@ -223,11 +223,14 @@ def find_malicious_packages(lock_file_path):
         with open(lock_file_path, 'r') as f:
             lock_data = json.load(f)
 
-        packages = lock_data.get('packages', {})
+        packages = {
+            k: v for k, v in lock_data.get('packages', {}).items() 
+            if k.startswith('node_modules/')
+        }
         for name, info in packages.items():
             package_name = name.rsplit('node_modules/', 1)[-1]
             version = info.get('version')
-            #print(f"Checking package: {package_name}@{version}...")
+            # print(f"Checking package: {package_name}@{version}...")
 
             if package_name in KNOWN_MALICIOUS_PACKAGES:
                 if version in KNOWN_MALICIOUS_PACKAGES[package_name]:
